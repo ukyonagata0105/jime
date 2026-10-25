@@ -1197,6 +1197,41 @@ SessionResult LiveSession::NextCandidate(int delta) {
                              });
         }
 
+        // Punctuation normally belongs to the preceding segment. Offer complete
+        // segment variants so choosing a comma does not discard or duplicate
+        // the word or its suffix (e.g. 「はい、」 -> 「はい,」).
+        const char* punctuation[][4] = {
+            {"、", ",", "，", "､"},
+            {"。", ".", "．", "｡"},
+        };
+        for (int variant = 0; variant < 4; ++variant) {
+            std::string surface = seg.surface;
+            for (const auto& forms : punctuation) {
+                if (seg.reading.find(forms[0]) == std::string::npos) continue;
+                for (int source = 0; source < 4; ++source) {
+                    if (source == variant) continue;
+                    size_t pos = 0;
+                    while ((pos = surface.find(forms[source], pos)) != std::string::npos) {
+                        surface.replace(pos, std::strlen(forms[source]), forms[variant]);
+                        pos += std::strlen(forms[variant]);
+                    }
+                }
+            }
+            if (surface == seg.surface) continue;
+            bool duplicate = false;
+            for (const auto& existing : candidatesFull_) {
+                const auto rendered = existing.wholeSegment ? existing.surface
+                                                            : existing.surface + candTailSurface_;
+                if (rendered == surface) { duplicate = true; break; }
+            }
+            if (!duplicate) {
+                Candidate c{surface, seg.lid, seg.rid};
+                c.wholeSegment = true;
+                c.score = 900002 + variant;
+                candidatesFull_.push_back(std::move(c));
+            }
+        }
+
         candidates_.clear();
         for (const auto& cc : candidatesFull_)
             candidates_.push_back(cc.wholeSegment ? cc.surface

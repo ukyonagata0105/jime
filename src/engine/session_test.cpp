@@ -2,6 +2,26 @@
 #include <cstdio>
 #include <string>
 
+static bool SelectPunctuation(jime::Engine& engine, const std::string& input,
+                              const std::string& expected) {
+    jime::LiveSession session(engine);
+    session.SetAutoCommitPunctuation(false);
+    for (char c : input)
+        if (!session.InputChar(c).commitText.empty()) return false;
+    auto result = session.NextCandidate(1);
+    const auto count = session.CandidateList().size();
+    for (size_t i = 0; i <= count; ++i) {
+        if (result.composition == expected)
+            return session.CommitAll().commitText == expected;
+        result = session.NextCandidate(1);
+    }
+    std::fprintf(stderr, "Missing punctuation candidate: %s -> %s\n",
+                 input.c_str(), expected.c_str());
+    for (const auto& c : session.CandidateList()) std::fprintf(stderr, "candidate: %s\n", c.c_str());
+    std::fprintf(stderr, "last composition: %s; commit: %s\n", result.composition.c_str(), result.commitText.c_str());
+    return false;
+}
+
 int main(int argc, char** argv) {
     if (argc != 3) return 2;
     jime::Engine engine;
@@ -40,6 +60,16 @@ int main(int argc, char** argv) {
     std::string expected;
     for (int i = 0; i < 10; ++i) expected += "今日はいい天気ですね。";
     if (automaticPrefix + bounded.CommitAll().commitText != expected) return 1;
+    for (const auto& item : {std::pair<std::string, std::string>{",", ","},
+                            {",", "，"}, {",", "､"}, {".", "."},
+                            {".", "．"}, {".", "｡"},
+                            {",,,", ",,,"}, {"kyouha,", "今日は,"}}) {
+        if (!SelectPunctuation(engine, item.first, item.second)) return 1;
+    }
+    jime::LiveSession halfWidth(engine);
+    halfWidth.SetAutoCommitPunctuation(false);
+    halfWidth.InputChar(',');
+    if (halfWidth.FunctionKey(10).composition != ",") return 1;
     std::puts("Punctuation remains editable when disabled; default auto-commit is preserved.");
     return 0;
 }
