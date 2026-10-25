@@ -949,8 +949,10 @@ void LiveSession::AutoCommit(std::string& out) {
     if (segments_.empty()) return;
     int cutSeg = 0;
     // 句読点で確定 (最後の句読点文節まで)
-    for (int i = 0; i < (int)segments_.size(); i++)
-        if (segments_[i].endsWithPunct) cutSeg = i + 1;
+    if (autoCommitPunctuation_) {
+        for (int i = 0; i < (int)segments_.size(); i++)
+            if (segments_[i].endsWithPunct) cutSeg = i + 1;
+    }
     // 変換待ちキュー長超過
     int remain = (int)segments_.size() - cutSeg;
     if (remain > kMaxPendingSegments)
